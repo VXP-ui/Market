@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stealth Funds: Expense Tracker</title>
+    <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #0d0d0d;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.7);
+        }
+        h1 {
+            text-align: center;
+            color: #ffcc00;
+        }
+        .expense-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px;
+            background: #333;
+            border-radius: 3px;
+        }
+        .summary {
+            margin-top: 20px;
+            padding: 10px;
+            border-top: 1px solid #444;
+        }
+        button {
+            background-color: #00cc00;
+            color: black;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            width: 100%;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #009900;
+        }
+        input {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background: #2a2a2a;
+            color: #e0e0e0;
+        }
+        input::placeholder {
+            color: #b3b3b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Stealth Funds: Expense Tracker</h1>
+        <label for="currentBalance">Current Balance: $</label>
+        <input type="number" id="currentBalance" placeholder="Enter your current balance" />
+
+        <h2>Recurring Income</h2>
+        <label for="recurringAmount">Amount to Add:</label>
+        <input type="number" id="recurringAmount" placeholder="Amount to add" />
+        <label for="recurringFrequency">Frequency:</label>
+        <select id="recurringFrequency">
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+        </select>
+        <button id="setRecurringButton">Set Recurring Income</button>
+
+        <h2>Add Expense</h2>
+        <label for="expenseDescription">Description:</label>
+        <input type="text" id="expenseDescription" placeholder="Expense description" />
+        <label for="expenseAmount">Cost: $</label>
+        <input type="number" id="expenseAmount" placeholder="Expense cost" />
+
+        <button id="addExpenseButton">Log Expense</button>
+
+        <h2>Expenses</h2>
+        <div id="expenseList"></div>
+
+        <div class="summary">
+            <h3>Summary</h3>
+            <p>Total Costs: $<span id="totalExpenses">0.00</span></p>
+            <p>Remaining Funds: $<span id="remainingBalance">0.00</span></p>
+            <button id="sendSummaryButton">Email Summary</button>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            emailjs.init("YOUR_USER_ID"); // Replace with your EmailJS user ID
+        })();
+
+        let currentBalance = parseFloat(localStorage.getItem('currentBalance')) || 0;
+        let totalExpenses = 0;
+        let recurringAmount = parseFloat(localStorage.getItem('recurringAmount')) || 0;
+        let recurringFrequency = localStorage.getItem('recurringFrequency') || 'weekly';
+        let lastUpdate = parseInt(localStorage.getItem('lastUpdate')) || 0;
+
+        // Check if the appropriate time has passed and update the balance
+        const updateRecurringIncome = () => {
+            const now = Date.now();
+            let timeElapsed = now - lastUpdate;
+
+            if (recurringFrequency === 'daily' && timeElapsed >= 24 * 60 * 60 * 1000) {
+                currentBalance += recurringAmount;
+                lastUpdate = now;
+            } else if (recurringFrequency === 'weekly' && timeElapsed >= 7 * 24 * 60 * 60 * 1000) {
+                currentBalance += recurringAmount;
+                lastUpdate = now;
+            } else if (recurringFrequency === 'monthly' && timeElapsed >= 30 * 24 * 60 * 60 * 1000) {
+                currentBalance += recurringAmount;
+                lastUpdate = now;
+            }
+
+            localStorage.setItem('currentBalance', currentBalance);
+            localStorage.setItem('lastUpdate', lastUpdate);
+        };
+
+        updateRecurringIncome();
+
+        // Load existing expenses from localStorage
+        const expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+        expenses.forEach(exp => addExpenseToDOM(exp.description, exp.amount));
+        totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
+        updateRemainingBalance();
+
+        document.getElementById('currentBalance').value = currentBalance;
+
+        document.getElementById('setRecurringButton').addEventListener('click', function() {
+            recurringAmount = parseFloat(document.getElementById('recurringAmount').value);
+            recurringFrequency = document.getElementById('recurringFrequency').value;
+
+            if (recurringAmount > 0) {
+                localStorage.setItem('recurringAmount', recurringAmount);
+                localStorage.setItem('recurringFrequency', recurringFrequency);
+                localStorage.setItem('lastUpdate', Date.now());
+                alert('Recurring income set successfully!');
+            }
+        });
+
+        document.getElementById('addExpenseButton').addEventListener('click', function() {
+            const description = document.getElementById('expenseDescription').value;
+            const amount = parseFloat(document.getElementById('expenseAmount').value);
+
+            if (amount > 0 && description) {
+                totalExpenses += amount;
+                localStorage.setItem('expenses', JSON.stringify([...expenses, { description, amount }]));
+                addExpenseToDOM(description, amount);
+
+                document.getElementById('expenseDescription').value = '';
+                document.getElementById('expenseAmount').value = '';
+
+                updateSummary();
+            }
+        });
+
+        function addExpenseToDOM(description, amount) {
+            const expenseList = document.getElementById('expenseList');
+            const expenseItem = document.createElement('div');
+            expenseItem.classList.add('expense-item');
+            expenseItem.innerHTML = `${description}: $${amount.toFixed(2)}`;
+            expenseList.appendChild(expenseItem);
+        }
+
+        function updateSummary() {
+            document.getElementById('totalExpenses').innerText = totalExpenses.toFixed(2);
+            updateRemainingBalance();
+        }
+
+        function updateRemainingBalance() {
+            const remainingBalance = currentBalance - totalExpenses;
+            document.getElementById('remainingBalance').innerText = remainingBalance > 0 ? remainingBalance.toFixed(2) : '0.00';
+        }
+
+        document.getElementById('sendSummaryButton').addEventListener('click', function() {
+            const summary = `Current Balance: $${currentBalance.toFixed(2)}\nTotal Costs: $${totalExpenses.toFixed(2)}\nRemaining Funds: $${(currentBalance - totalExpenses).toFixed(2)}`;
+
+            emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", {
+                summary: summary,
+                to_email: "YOUR_EMAIL_ADDRESS" // Your email address
+            })
+            .then(function(response) {
+                console.log('Email sent successfully!', response.status, response.text);
+                alert('Summary emailed successfully!');
+            }, function(error) {
+                console.error('Failed to send email:', error);
+                alert('Failed to send email. Please try again later.');
+            });
+        });
+    </script>
+</body>
+</html>
